@@ -63,6 +63,7 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
     private ContainerManager containerManager;
     private boolean isDarkMode;
 
+    // --- REMOVIDO O MÉTODO DUPLICADO QUE ESTAVA AQUI ---
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -91,7 +92,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             setTheme(R.style.AppTheme);
         }
 
-
         setContentView(R.layout.main_activity);
 
         drawerLayout = findViewById(R.id.DrawerLayout);
@@ -109,7 +109,6 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
         int textColor = isDarkMode ? Color.WHITE : Color.BLACK;
         setNavigationViewItemTextColor(navigationView, textColor);
         
-
         containerManager = new ContainerManager(this);
 
         Intent intent = getIntent();
@@ -256,19 +255,14 @@ public class MainActivity extends AppCompatActivity implements NavigationView.On
             case R.id.main_menu_about:
                 showAboutDialog();
                 break;
+            // --- NOVO ITEM: FILE MANAGER ---
+            case R.id.main_menu_file_manager:
+                show(new FileManagerFragment(), false);
+                break;
+            // -------------------------------
         }
         return true;
     }
-
-
-//    private void show(Fragment fragment) {
-//        FragmentManager fragmentManager = getSupportFragmentManager();
-//        fragmentManager.beginTransaction()
-//                .replace(R.id.FLFragmentContainer, fragment)
-//                .commit();
-//
-//        drawerLayout.closeDrawer(GravityCompat.START);
-//    }
 
     private void show(Fragment fragment, boolean reverse) {
         FragmentManager fragmentManager = getSupportFragmentManager();

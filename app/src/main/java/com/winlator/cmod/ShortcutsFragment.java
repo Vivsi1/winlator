@@ -9,6 +9,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.drawable.Icon;
 import android.net.Uri;
 import android.os.Build;
@@ -26,6 +28,8 @@ import android.widget.PopupMenu;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
@@ -36,25 +40,21 @@ import androidx.recyclerview.widget.DividerItemDecoration;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.winlator.cmod.R;
 import com.winlator.cmod.container.Container;
 import com.winlator.cmod.container.ContainerManager;
 import com.winlator.cmod.container.Shortcut;
 import com.winlator.cmod.contentdialog.ContentDialog;
 import com.winlator.cmod.contentdialog.ShortcutSettingsDialog;
-import com.winlator.cmod.contents.ContentsManager;
 import com.winlator.cmod.core.FileUtils;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.CopyOption;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -65,6 +65,9 @@ public class ShortcutsFragment extends Fragment {
     private RecyclerView recyclerView;
     private TextView emptyTextView;
     private ContainerManager manager;
+    
+    private Shortcut shortcutForIconUpdate;
+    private ActivityResultLauncher<String> iconPickerLauncher;
 
     public static final int IMPORT_SHORTCUT = 1005;
 
@@ -72,6 +75,12 @@ public class ShortcutsFragment extends Fragment {
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setHasOptionsMenu(false);
+
+        iconPickerLauncher = registerForActivityResult(new ActivityResultContracts.GetContent(), uri -> {
+            if (uri != null && shortcutForIconUpdate != null) {
+                updateShortcutIcon(uri, shortcutForIconUpdate);
+            }
+        });
     }
 
     @Override
@@ -79,15 +88,14 @@ public class ShortcutsFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         manager = new ContainerManager(getContext());
         loadShortcutsList();
-        ((AppCompatActivity)getActivity()).getSupportActionBar().setTitle(R.string.shortcuts);
+        if (getActivity() != null && ((AppCompatActivity) getActivity()).getSupportActionBar() != null) {
+            ((AppCompatActivity) getActivity()).getSupportActionBar().setTitle(R.string.shortcuts);
+        }
     }
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
-
-
-
         FrameLayout frameLayout = (FrameLayout)inflater.inflate(R.layout.shortcuts_fragment, container, false);
         recyclerView = frameLayout.findViewById(R.id.RecyclerView);
         emptyTextView = frameLayout.findViewById(R.id.TVEmptyText);
@@ -98,15 +106,52 @@ public class ShortcutsFragment extends Fragment {
 
     public void loadShortcutsList() {
         ArrayList<Shortcut> shortcuts = manager.loadShortcuts();
-
-        // Validate and remove corrupted shortcuts
-        shortcuts.removeIf(shortcut -> shortcut == null || shortcut.file == null || shortcut.file.getName().isEmpty());
-
-        recyclerView.setAdapter(new ShortcutsAdapter(shortcuts));
-        if (shortcuts.isEmpty()) emptyTextView.setVisibility(View.VISIBLE);
-        else emptyTextView.setVisibility(View.GONE); // Ensure the empty text view is hidden if there are shortcuts
+        if (shortcuts != null) {
+            shortcuts.removeIf(shortcut -> shortcut == null || shortcut.file == null || shortcut.file.getName().isEmpty());
+            
+            // Aplica o ícone do Wine se o atalho não tiver ícone (evita crash e ícone invisível)
+            Bitmap defaultIcon = BitmapFactory.decodeResource(getResources(), R.drawable.icon_wine);
+            for (Shortcut shortcut : shortcuts) {
+                if (shortcut.icon == null) {
+                    shortcut.icon = defaultIcon;
+                }
+            }
+            
+            recyclerView.setAdapter(new ShortcutsAdapter(shortcuts));
+            if (shortcuts.isEmpty()) emptyTextView.setVisibility(View.VISIBLE);
+            else emptyTextView.setVisibility(View.GONE);
+        }
     }
 
+    private void updateShortcutIcon(Uri sourceUri, Shortcut shortcut) {
+        try {
+            File externalStorage = Environment.getExternalStorageDirectory();
+            File iconsDir = new File(externalStorage, "Winlator/icons");
+            
+            if (!iconsDir.exists()) {
+                iconsDir.mkdirs();
+            }
+
+            String baseName = FileUtils.getBasename(shortcut.file.getPath());
+            File destFile = new File(iconsDir, baseName + ".png");
+
+            try (InputStream is = getContext().getContentResolver().openInputStream(sourceUri);
+                 OutputStream os = new FileOutputStream(destFile)) {
+                byte[] buffer = new byte[1024];
+                int length;
+                while ((length = is.read(buffer)) > 0) {
+                    os.write(buffer, 0, length);
+                }
+            }
+
+            Toast.makeText(getContext(), "Icon updated!", Toast.LENGTH_SHORT).show();
+            loadShortcutsList(); 
+
+        } catch (Exception e) {
+            Log.e("ShortcutsFragment", "Error saving icon", e);
+            Toast.makeText(getContext(), "Error saving icon", Toast.LENGTH_SHORT).show();
+        }
+    }
 
     private class ShortcutsAdapter extends RecyclerView.Adapter<ShortcutsAdapter.ViewHolder> {
         private final List<Shortcut> data;
@@ -142,17 +187,27 @@ public class ShortcutsFragment extends Fragment {
         public void onViewRecycled(@NonNull ViewHolder holder) {
             holder.menuButton.setOnClickListener(null);
             holder.innerArea.setOnClickListener(null);
+            holder.imageView.setOnClickListener(null);
             super.onViewRecycled(holder);
         }
 
         @Override
         public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
             final Shortcut item = data.get(position);
+            
             if (item.icon != null) holder.imageView.setImageBitmap(item.icon);
+            else holder.imageView.setImageResource(R.drawable.icon_wine); // Fallback extra
+            
             holder.title.setText(item.name);
             holder.subtitle.setText(item.container.getName());
+            
             holder.menuButton.setOnClickListener((v) -> showListItemMenu(v, item));
             holder.innerArea.setOnClickListener((v) -> runFromShortcut(item));
+
+            holder.imageView.setOnClickListener((v) -> {
+                shortcutForIconUpdate = item;
+                iconPickerLauncher.launch("image/*");
+            });
         }
 
         @Override
@@ -174,36 +229,30 @@ public class ShortcutsFragment extends Fragment {
                 else if (itemId == R.id.shortcut_remove) {
                     ContentDialog.confirm(context, R.string.do_you_want_to_remove_this_shortcut, () -> {
                         boolean fileDeleted = shortcut.file.delete();
-                        File lnkFile = new File(shortcut.file.getPath().substring(0, shortcut.file.getPath().lastIndexOf(".")) + ".lnk");
-                        if (lnkFile.exists()) {
-                            lnkFile.delete();
-                        }
+                        
+                        try {
+                            File lnkFile = new File(shortcut.file.getPath().substring(0, shortcut.file.getPath().lastIndexOf(".")) + ".lnk");
+                            if (lnkFile.exists()) lnkFile.delete();
+                        } catch (Exception e) {}
 
                         if (fileDeleted) {
                             disableShortcutOnScreen(requireContext(), shortcut);
                             loadShortcutsList();
                             Toast.makeText(context, "Shortcut removed successfully.", Toast.LENGTH_SHORT).show();
                         } else {
-                            Toast.makeText(context, "Failed to remove the shortcut. Please try again.", Toast.LENGTH_SHORT).show();
+                            Toast.makeText(context, "Failed to remove the shortcut.", Toast.LENGTH_SHORT).show();
                         }
                     });
                 }
                 else if (itemId == R.id.shortcut_clone_to_container) {
-                    // Use the ContainerManager to get the list of containers
                     ContainerManager containerManager = new ContainerManager(context);
                     ArrayList<Container> containers = containerManager.getContainers();
-
-                    // Show a container selection dialog
-                    showContainerSelectionDialog(containers, new OnContainerSelectedListener() {
-                        @Override
-                        public void onContainerSelected(Container selectedContainer) {
-                            // Use the selected container to clone the shortcut
-                            if (shortcut.cloneToContainer(selectedContainer)) {
-                                Toast.makeText(context, "Shortcut cloned successfully.", Toast.LENGTH_SHORT).show();
-                                loadShortcutsList(); // Reload the shortcuts to show the cloned one
-                            } else {
-                                Toast.makeText(context, "Failed to clone shortcut.", Toast.LENGTH_SHORT).show();
-                            }
+                    showContainerSelectionDialog(containers, selectedContainer -> {
+                        if (shortcut.cloneToContainer(selectedContainer)) {
+                            Toast.makeText(context, "Shortcut cloned successfully.", Toast.LENGTH_SHORT).show();
+                            loadShortcutsList(); 
+                        } else {
+                            Toast.makeText(context, "Failed to clone shortcut.", Toast.LENGTH_SHORT).show();
                         }
                     });
                 }
@@ -226,33 +275,21 @@ public class ShortcutsFragment extends Fragment {
             listItemMenu.show();
         }
 
-
-        // Define the listener interface for selecting a container
-        public interface OnContainerSelectedListener {
-            void onContainerSelected(Container container);
-        }
-
         private void showContainerSelectionDialog(ArrayList<Container> containers, OnContainerSelectedListener listener) {
-            // Create an AlertDialog to show the list of containers
             AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
             builder.setTitle("Select a container");
 
-            // Create an array of container names to display
             String[] containerNames = new String[containers.size()];
             for (int i = 0; i < containers.size(); i++) {
                 containerNames[i] = containers.get(i).getName();
             }
 
-            // Set up the list in the dialog
             builder.setItems(containerNames, (dialog, which) -> {
-                // Call the listener when a container is selected
                 listener.onContainerSelected(containers.get(which));
             });
-
-            // Show the dialog
             builder.show();
         }
-
+        
         private void runFromShortcut(Shortcut shortcut) {
             Activity activity = getActivity();
 
@@ -260,24 +297,21 @@ public class ShortcutsFragment extends Fragment {
                 Intent intent = new Intent(activity, XServerDisplayActivity.class);
                 intent.putExtra("container_id", shortcut.container.id);
                 intent.putExtra("shortcut_path", shortcut.file.getPath());
-                intent.putExtra("shortcut_name", shortcut.name); // Add this line to pass the shortcut name
-                // Check if the shortcut has the disableXinput value; if not, default to false.
-                String disableXinputValue = shortcut.getExtra("disableXinput", "0"); // Get value from shortcut or use "0" (false) by default
-                intent.putExtra("disableXinput", disableXinputValue); // Use the actual value from the shortcut
+                intent.putExtra("shortcut_name", shortcut.name); 
+                String disableXinputValue = shortcut.getExtra("disableXinput", "0"); 
+                intent.putExtra("disableXinput", disableXinputValue); 
                 activity.startActivity(intent);
             }
             else XrActivity.openIntent(activity, shortcut.container.id, shortcut.file.getPath());
         }
 
         private void exportShortcut(Shortcut shortcut) {
-            // Check for a custom frontend export path in shared preferences
             SharedPreferences sharedPreferences = PreferenceManager.getDefaultSharedPreferences(getContext());
             String uriString = sharedPreferences.getString("shortcuts_export_path_uri", null);
 
             File shortcutsDir;
 
             if (uriString != null) {
-                // If custom URI is set, use it
                 Uri folderUri = Uri.parse(uriString);
                 DocumentFile pickedDir = DocumentFile.fromTreeUri(getContext(), folderUri);
 
@@ -327,18 +361,7 @@ public class ShortcutsFragment extends Fragment {
                     writer.flush();
                 }
 
-                Log.d("ShortcutsFragment", "Shortcut exported successfully to " + exportFile.getPath());
-
-                // Determine the toast message
-                String message;
-                if (fileExists) {
-                    message = "Shortcut Updated at " + exportFile.getPath();
-                } else {
-                    message = "Shortcut Exported to " + exportFile.getPath();
-                }
-
-                // Show a toast message to the user
-                Toast.makeText(getContext(), message, Toast.LENGTH_LONG).show();
+                Toast.makeText(getContext(), fileExists ? "Shortcut Updated" : "Shortcut Exported", Toast.LENGTH_LONG).show();
 
             } catch (IOException e) {
                 Log.e("ShortcutsFragment", "Failed to export shortcut", e);
@@ -354,7 +377,6 @@ public class ShortcutsFragment extends Fragment {
             File desktopFile = shortcut.file;
 
             if (uriString != null) {
-                // If custom URI is set, use it
                 Uri folderUri = Uri.parse(uriString);
                 DocumentFile pickedDir = DocumentFile.fromTreeUri(getContext(), folderUri);
 
@@ -369,8 +391,7 @@ public class ShortcutsFragment extends Fragment {
             }
 
             if (!shortcutsDir.exists()) {
-                Toast.makeText(getContext(), "There are no saved shortcuts, a shortcut to be imported need to be placed in the shortcut exports directory", Toast.LENGTH_LONG).show();
-                shortcutsDir.mkdirs();
+                Toast.makeText(getContext(), "No exported shortcuts found", Toast.LENGTH_LONG).show();
                 return;
             }
 
@@ -393,7 +414,7 @@ public class ShortcutsFragment extends Fragment {
             }
 
             if (!found) {
-                Toast.makeText(getContext(), "No shortcut matching the one to import has been found", Toast.LENGTH_SHORT).show();
+                Toast.makeText(getContext(), "No matching shortcut found to import", Toast.LENGTH_SHORT).show();
             }
         }
 
@@ -406,7 +427,6 @@ public class ShortcutsFragment extends Fragment {
             long totalPlaytime = playtimePrefs.getLong(playtimeKey, 0);
             int playCount = playtimePrefs.getInt(playCountKey, 0);
 
-            // Convert playtime to human-readable format
             long seconds = (totalPlaytime / 1000) % 60;
             long minutes = (totalPlaytime / (1000 * 60)) % 60;
             long hours = (totalPlaytime / (1000 * 60 * 60)) % 24;
@@ -414,7 +434,6 @@ public class ShortcutsFragment extends Fragment {
 
             String playtimeFormatted = String.format("%dd %02dh %02dm %02ds", days, hours, minutes, seconds);
 
-            // Create the properties dialog
             ContentDialog dialog = new ContentDialog(getContext(), R.layout.shortcut_properties_dialog);
             dialog.setTitle("Properties");
 
@@ -434,10 +453,10 @@ public class ShortcutsFragment extends Fragment {
 
             dialog.show();
         }
-
-
-
-
+    }
+    
+    public interface OnContainerSelectedListener {
+        void onContainerSelected(Container container);
     }
 
     private ShortcutInfo buildScreenShortCut(String shortLabel, String longLabel, int containerId, String shortcutPath, Icon icon, String uuid) {

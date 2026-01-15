@@ -188,8 +188,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     private SharedPreferences playtimePrefs;
     private String shortcutName;
     private Handler handler;
-    private Runnable savePlaytimeRunnable;
-    private static final long SAVE_INTERVAL_MS = 1000;
 
     private Handler  timeoutHandler = new Handler(Looper.getMainLooper());
     private Runnable hideControlsRunnable;
@@ -256,15 +254,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
 
         // Initialize handler for periodic saving
         handler = new Handler(Looper.getMainLooper());
-        savePlaytimeRunnable = new Runnable() {
-            @Override
-            public void run() {
-                savePlaytimeData();
-                handler.postDelayed(this, SAVE_INTERVAL_MS);
-            }
-        };
-        handler.postDelayed(savePlaytimeRunnable, SAVE_INTERVAL_MS);
-
 
         // Handler and Runnable to manage timeout for hiding controls
 
@@ -690,7 +679,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             environment.onResume();
         }
         startTime = System.currentTimeMillis();
-        handler.postDelayed(savePlaytimeRunnable, SAVE_INTERVAL_MS);
         ProcessHelper.resumeAllWineProcesses();
     }
 
@@ -708,7 +696,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         }
 
         savePlaytimeData();
-        handler.removeCallbacks(savePlaytimeRunnable);
         ProcessHelper.pauseAllWineProcesses();
     }
 
@@ -750,7 +737,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             @Override
             public void run() {
                 savePlaytimeData(); // Save on destroy
-                handler.removeCallbacks(savePlaytimeRunnable);
                 if (midiHandler != null) midiHandler.stop();
                 // Unregister sensor listener to avoid memory leaks
                 if (environment != null) environment.stopEnvironmentComponents();
@@ -782,7 +768,6 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
     protected void onStop() {
         super.onStop();
         savePlaytimeData();
-        handler.removeCallbacks(savePlaytimeRunnable);
     }
 
     @Override
@@ -1781,8 +1766,26 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
             if (shortcut.path.endsWith(".lnk")) {
                 args += "\"" + shortcut.path + "\"" + execArgs;
             } else {
-                String exeDir = FileUtils.getDirname(shortcut.path);
-                String filename = FileUtils.getName(shortcut.path);
+                
+                String fullPath = shortcut.path.replace("\"", ""); 
+                String exeDir;
+                String filename;
+
+                if (fullPath.contains("\\")) {
+                    
+                    int lastSlash = fullPath.lastIndexOf("\\");
+                    if (lastSlash != -1) {
+                        exeDir = fullPath.substring(0, lastSlash);
+                        filename = fullPath.substring(lastSlash + 1);
+                    } else {
+                        exeDir = "D:\\";
+                        filename = fullPath;
+                    }
+                } else {
+                    
+                    exeDir = FileUtils.getDirname(fullPath);
+                    filename = FileUtils.getName(fullPath);
+                }
 
                 int dotIndex = filename.lastIndexOf(".");
                 int spaceIndex = (dotIndex != -1) ? filename.indexOf(" ", dotIndex) : -1;
@@ -1809,17 +1812,22 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
         return command;
     }
 
-    private String getExecutable() {
-        String filename = "";
-        if (shortcut != null) {
-            filename = FileUtils.getName(shortcut.path);
+private String getExecutable() {
+        String filename = "wfm.exe";
+        if (shortcut != null && shortcut.path != null) {
+            String cleanPath = shortcut.path.replace("\"", "");
+            int lastSlash = cleanPath.lastIndexOf('/');
+            int lastBackslash = cleanPath.lastIndexOf('\\');
+            int lastSeparator = Math.max(lastSlash, lastBackslash);
+            
+            if (lastSeparator != -1) {
+                filename = cleanPath.substring(lastSeparator + 1);
+            } else {
+                filename = cleanPath;
+            }
         }
-        else
-            filename = "wfm.exe";
         return filename;
     }
-
-
     public XServer getXServer() {
         return xServer;
     }
