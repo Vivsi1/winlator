@@ -1,6 +1,18 @@
-- name: Revert commit (auto-resolve)
+- name: Revert commit (safe auto-resolve)
         run: |
-          git revert a29ce561807e3fc53fac7e09d548c2d2f3e25854 || true
-          git rm app/src/main/java/com/winlator/cmod/ExternalControllerBindingsActivity.java
-          git add .
-          git revert --continue
+          set +e
+
+          git revert a29ce561807e3fc53fac7e09d548c2d2f3e25854
+
+          if [ -f app/src/main/java/com/winlator/cmod/ExternalControllerBindingsActivity.java ]; then
+            echo "Removing conflicting file"
+            git rm app/src/main/java/com/winlator/cmod/ExternalControllerBindingsActivity.java
+          fi
+
+          git add -A
+
+          if [ -d .git/revert-apply ] || [ -d .git/sequencer ]; then
+            git revert --continue
+          else
+            echo "No revert in progress, nothing to continue"
+          fi
