@@ -1,0 +1,26 @@
+name: Revert commit a29ce561807e3fc53fac7e09d548c2d2f3e25854
+
+on:
+  workflow_dispatch:
+
+jobs:
+  revert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Revert commit
+        run: |
+          git revert a29ce561807e3fc53fac7e09d548c2d2f3e25854 --no-edit
+
+      - name: Push changes
+        run: |
+          git push origin HEAD
