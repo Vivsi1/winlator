@@ -1,4 +1,23 @@
-- name: Revert commit (safe auto-resolve)
+name: Revert commit (safe auto-resolve)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  revert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Revert commit safely
         run: |
           set +e
 
@@ -14,5 +33,9 @@
           if [ -d .git/revert-apply ] || [ -d .git/sequencer ]; then
             git revert --continue
           else
-            echo "No revert in progress, nothing to continue"
+            echo "No revert in progress"
           fi
+
+      - name: Push changes
+        run: |
+          git push origin HEAD
