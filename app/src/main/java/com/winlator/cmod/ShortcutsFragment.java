@@ -274,9 +274,6 @@ public class ShortcutsFragment extends Fragment {
                 else if (itemId == R.id.shortcut_export) {
                     exportShortcut(shortcut);
                 }
-                else if (itemId == R.id.shortcut_import) {
-                    importShortcut(shortcut);
-                }
                 else if (itemId == R.id.shortcut_properties) {
                     showShortcutProperties(shortcut);
                 }

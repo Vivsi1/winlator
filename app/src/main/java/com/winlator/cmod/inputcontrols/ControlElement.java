@@ -95,11 +95,17 @@ public class ControlElement {
         setBinding(Binding.NONE);
         scroller = null;
 
-        if (type == Type.D_PAD || type == Type.STICK) {
+        if (type == Type.STICK) {
             bindings[0] = Binding.KEY_W;
             bindings[1] = Binding.KEY_D;
             bindings[2] = Binding.KEY_S;
             bindings[3] = Binding.KEY_A;
+        }
+        else if(type == Type.D_PAD){
+            bindings[0] = Binding.GAMEPAD_DPAD_UP;
+            bindings[1] = Binding.GAMEPAD_DPAD_RIGHT;
+            bindings[2] = Binding.GAMEPAD_DPAD_DOWN;
+            bindings[3] = Binding.GAMEPAD_DPAD_LEFT;
         }
         else if (type == Type.TRACKPAD) {
             bindings[0] = Binding.GAMEPAD_RIGHT_THUMB_UP;
