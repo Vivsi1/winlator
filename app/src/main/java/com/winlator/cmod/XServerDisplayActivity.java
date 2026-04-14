@@ -1173,6 +1173,10 @@ public class XServerDisplayActivity extends AppCompatActivity implements Navigat
              // Cleanup moved to onCreate
         }
 
+        // Reserve controller slots before Wine starts so physical pads are visible
+        // without requiring a first user input event.
+        winHandler.preAssignConnectedControllers();
+
         // Start all environment components (XServer, Audio, Wine, etc.)
         environment.startEnvironmentComponents();
 
