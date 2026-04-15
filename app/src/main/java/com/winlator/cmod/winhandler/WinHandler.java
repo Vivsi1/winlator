@@ -606,8 +606,11 @@ public class WinHandler {
 
     public void sendGamepadState() {
         final ControlsProfile profile = activity.getInputControlsView().getProfile();
-        if (profile == null)
+        if (profile == null) {
+            // Input Controls "Disabled": ensure virtual gamepad slot is actually released.
+            releaseSlot(OSC_DEVICE_ID);
             return;
+        }
 
         final GamepadState gamepadState = profile.getGamepadState();
         final boolean useVirtualGamepad = profile.isVirtualGamepad()
