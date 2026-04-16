@@ -230,12 +230,12 @@ public abstract class WineUtils {
 
                 if (selection == Container.STARTUP_SELECTION_ESSENTIAL) {
                     if (servicesList.contains(service)) {
-                        if (!name.equals("winebus") && !name.equals("winehid")) {
+                        if (!name.equals("winebus") && !name.equals("winehid") && !name.equals("PlugPlay")) {
                             value = 4;
                         }
                     }
                 } else if (selection == Container.STARTUP_SELECTION_AGGRESSIVE) {
-                    if (!name.equals("winebus") && !name.equals("winehid")) {
+                    if (!name.equals("winebus") && !name.equals("winehid") && !name.equals("PlugPlay")) {
                         value = 4;
                     }
                 }
