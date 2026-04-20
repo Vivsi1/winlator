@@ -18,6 +18,7 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Locale;
 
 public class ExternalController {
     public static final byte IDX_BUTTON_A = 0;
@@ -475,6 +476,10 @@ public class ExternalController {
 
     public static boolean isGameController(InputDevice device) {
         if (device == null) return false;
+        // Some Android devices expose userspace uinput nodes (fingerprint readers,
+        // sensors) with SOURCE_GAMEPAD/SOURCE_JOYSTICK, stealing controller slots.
+        String name = device.getName();
+        if (name != null && name.toLowerCase(Locale.ENGLISH).contains("uinput-fpc")) return false;
         int sources = device.getSources();
         // Exclude devices with SOURCE_MOUSE from being considered controllers
         return !device.isVirtual() && ((sources & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD ||
